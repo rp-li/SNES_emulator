@@ -1,0 +1,28 @@
+#ADDRESSING MODES
+
+#'imp': Implied
+#'immemflag': ImmediateMemoryFlag
+#'imindexflag': ImmediateIndexFlag
+#'im8bit': Immediate8-Bit
+#'rel': Relative
+#'rellong': Relative long
+#'d': Direct
+#'dix': Direct indexed (with X)
+#'diy': Direct indexed (with Y)
+#'di': Direct indirect
+#'dindxi': Direct indexed indirect
+#'diindx': Direct indirect indexed
+#'dil': Direct indirect long
+#'diindxl': Direct indirect indexed long
+#'abs': Absolute
+#'absindxx': Absolute indexed (with X)
+#'absindxy': Absolute indexed (with Y)
+#'absl': Absolute long
+#'absindl': Absolute indexed long
+#'sr': Stack relative
+#'sriindx': Stack relative indirect indexed
+#'absi': Absolute indirect
+#'absil': Absolute indirect long
+#'absindi': Absolute indexed indirect
+#'impacc': Implied accumulator
+#'bm': Block move
