@@ -3,12 +3,6 @@ import binascii
 import sys
 from mem import *
 
-class rom:
-    def __init__(self, rompath):
-        with open(rompath, 'rb') as r:
-            content=r.read()
-        self.buffer=binascii.hexlify(content)
-
 class cpu:
     def __init__(self, speed):
         self.debug=1
