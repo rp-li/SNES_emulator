@@ -1,9 +1,17 @@
 import numpy as np
 import binascii
 import sys
+from mem import *
+
+class rom:
+    def __init__(self, rompath):
+        with open(rompath, 'rb') as r:
+            content=r.read()
+        self.buffer=binascii.hexlify(content)
 
 class cpu:
     def __init__(self, speed):
+        self.debug=1
         self.speed=speed
         self.cycles=0
         #CPU REGISTERS
@@ -17,17 +25,62 @@ class cpu:
         self.reg_P='00000000'     #processor status flags
         self.reg_PC='0000000000000000'   #program counter (memory address)
 
-    #P REGISTER FLAGS
-    #N='10000000'
-    #V='01000000'
-    #Z='00000010'
-    #C='00000001'
-    #D='00001000'
-    #I='00000100'
-    #X='00010000'
-    #M='00100000'
-    #E='00000000'
-    #B='00010000'
+    def readrom(self, addr):
+        return rom.buffer[addr:addr+1]
+        
+    def run(self, bytecode):
+        if bytecode=='78':
+            if self.debug==1:
+                print 'SEI'
+            self.setflag('I')
+            
+        elif bytecode=='9C':
+            if self.debug==1:
+                print 'STZ(absolute)'
+            #mem.write(
+
+    def setflag(self,flag):
+        if 'N' in flag:
+            temp=list(self.reg_P)
+            temp[0]='1'
+            self.reg_P="".join(temp)
+        if 'V' in flag:
+            temp=list(self.reg_P)
+            temp[1]='1'
+            self.reg_P="".join(temp)
+        if 'Z' in flag:
+            temp=list(self.reg_P)
+            temp[6]='1'
+            self.reg_P="".join(temp)
+        if 'C' in flag:
+            temp=list(self.reg_P)
+            temp[7]='1'
+            self.reg_P="".join(temp)
+        if 'D' in flag:
+            temp=list(self.reg_P)
+            temp[4]='1'
+            self.reg_P="".join(temp)
+        if 'I' in flag:
+            temp=list(self.reg_P)
+            temp[5]='1'
+            self.reg_P="".join(temp)
+        if 'X' in flag:
+            temp=list(self.reg_P)
+            temp[3]='1'
+            self.reg_P="".join(temp)
+        if 'M' in flag:
+            temp=list(self.reg_P)
+            temp[2]='1'
+            self.reg_P="".join(temp)
+        if 'E' in flag:
+            temp=list(self.reg_P)
+            #6502 emulation mode
+            self.reg_P="".join(temp)
+        if 'B' in flag:
+            #emulation mode only
+            temp=list(self.reg_P)
+            temp[3]='1'
+            self.reg_P="".join(temp)
 
     #ADDRESSING MODES
 
@@ -270,8 +323,10 @@ class cpu:
     def SED(addr_mode, ):
         return
 
-    def SEI(addr_mode, ):
-        return
+    def SEI(self,):
+        self.temp=list(self.reg_P)
+        self.temp[5]='1'
+        self.reg_P="".join(self.temp)
 
     def STA(addr_mode, ):
         return
@@ -285,8 +340,9 @@ class cpu:
     def STY(addr_mode, ):
         return
 
-    def STZ(addr_mode, ):
-        return
+    def STZ(self, addr_mode, arg):
+        if addr_mode=='a':
+            mem.write(arg, '00')
 
     def TAX(addr_mode, ):
         return
@@ -342,4 +398,3 @@ class cpu:
     def XCE(addr_mode, ):
         return
 
-cpu

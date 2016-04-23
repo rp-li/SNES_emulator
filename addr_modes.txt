@@ -26,3 +26,16 @@
 #'absindi': Absolute indexed indirect
 #'impacc': Implied accumulator
 #'bm': Block move
+
+
+#P REGISTER FLAGS
+    #N='10000000'
+    #V='01000000'
+    #Z='00000010'
+    #C='00000001'
+    #D='00001000'
+    #I='00000100'
+    #X='00010000'
+    #M='00100000'
+    #E='00000000'
+    #B='00010000'
