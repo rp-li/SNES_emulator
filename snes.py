@@ -2,6 +2,7 @@ import numpy as np
 import binascii
 import sys
 import threading
+import time
 
 ROMPATH="../SMW_rom.sfc"
 #ROMPATH="../test.txt"
@@ -38,8 +39,9 @@ class cpu:
         self.reg_PC=rom.reset_vector
         self.isrunning=1
         while self.isrunning==1:
+            if self.debug==1:
+                print time.time(),
             self.run(mem.read(self.reg_PB,self.reg_PC,self.reg_PC))
-
             if self.cycles>20:
                 self.isrunning=0
 
