@@ -64,39 +64,39 @@ class cpu:
         else:
             self.tick()
             print 'CPU error: unknown opcode', bytecode
-
-    def setflag(self,flag):
+            
+    def setflag(self, flag, clear=0):
         if 'N' in flag:
             temp=list(self.reg_P)
-            temp[0]='1'
+            temp[0]=str(int(not(clear)))
             self.reg_P="".join(temp)
         if 'V' in flag:
             temp=list(self.reg_P)
-            temp[1]='1'
+            temp[1]=str(int(not(clear)))
             self.reg_P="".join(temp)
         if 'Z' in flag:
             temp=list(self.reg_P)
-            temp[6]='1'
+            temp[6]=str(int(not(clear)))
             self.reg_P="".join(temp)
         if 'C' in flag:
             temp=list(self.reg_P)
-            temp[7]='1'
+            temp[7]=str(int(not(clear)))
             self.reg_P="".join(temp)
         if 'D' in flag:
             temp=list(self.reg_P)
-            temp[4]='1'
+            temp[4]=str(int(not(clear)))
             self.reg_P="".join(temp)
         if 'I' in flag:
             temp=list(self.reg_P)
-            temp[5]='1'
+            temp[5]=str(int(not(clear)))
             self.reg_P="".join(temp)
         if 'X' in flag:
             temp=list(self.reg_P)
-            temp[3]='1'
+            temp[3]=str(int(not(clear)))
             self.reg_P="".join(temp)
         if 'M' in flag:
             temp=list(self.reg_P)
-            temp[2]='1'
+            temp[2]=str(int(not(clear)))
             self.reg_P="".join(temp)
         if 'E' in flag:
             temp=list(self.reg_P)
@@ -105,7 +105,7 @@ class cpu:
         if 'B' in flag:
             #emulation mode only
             temp=list(self.reg_P)
-            temp[3]='1'
+            temp[3]=str(int(not(clear)))
             self.reg_P="".join(temp)
 
 class mem:

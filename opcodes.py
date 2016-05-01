@@ -7,15 +7,31 @@ def dec(addr):
 class opcodes: 
     def __init__(self):
         self.dict={}
-        #self.dict['00']=self.BRK
+        self.dict['00']=self.BRK
         self.dict['78']=self.SEI
         self.dict['9c']=self.STZ_addr
         self.dict['a9']=self.LDA_const
 
-    #def BRK(self,cpu, mem):
+    def BRK(self,cpu, mem):
+        if cpu.debug==1:
+            print cpu.cycles,
         #should have emulation mode for 6502
-     #   cpu.tick()
-     #   cpu.reg_PC=cpu.reg_S
+        cpu.tick()
+        cpu.reg_S=cpu.reg_S[0:2]+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC))[2:],hex(dec(cpu.reg_PC))[2:])
+        cpu.tick()
+        cpu.reg_S=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC))[2:],hex(dec(cpu.reg_PC))[2:])+cpu.reg_S[2:4]
+        mem.write(cpu.reg_PB, cpu.reg_S, cpu.reg_PC)
+        cpu.reg_PC=hex(dec(cpu.reg_PC)+2)[2:]
+        cpu.tick()
+        cpu.setflag('I')
+        cpu.setflag('D', clear=1)
+        cpu.tick()
+        cpu.reg_PB='00'
+        cpu.tick()
+        cpu.reg_PC=mem.read('cpu.reg_PB','ffe6','ffe7')
+        if cpu.debug==1:
+            print 'BRK at ', cpu.reg_PB, cpu.reg_S
+
         
     def SEI(self,cpu, mem):
         if cpu.debug==1:
