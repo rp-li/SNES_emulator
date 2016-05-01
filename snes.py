@@ -3,6 +3,7 @@ import binascii
 import sys
 import threading
 import time
+from opcodes import opcodes
 
 ROMPATH="../SMW_rom.sfc"
 #ROMPATH="../test.txt"
@@ -14,9 +15,10 @@ def dec(addr):
         return int(addr,16)
 
 class cpu:
-    def __init__(self, speed):
+    def __init__(self):
+        self.opcodes=opcodes()
         self.debug=1
-        self.speed=speed
+        self.speed=123
         self.cycles=0
         self.isrunning=0
         #CPU REGISTERS
@@ -42,7 +44,7 @@ class cpu:
             if self.debug==1:
                 print time.time(),
             self.run(mem.read(self.reg_PB,self.reg_PC,self.reg_PC))
-            if self.cycles>20:
+            if self.cycles>30:
                 self.isrunning=0
 
     def show(self):
@@ -57,26 +59,11 @@ class cpu:
         print 'Program counter register: ', self.reg_PC
         
     def run(self, bytecode):
-        if bytecode=='78':
-            if self.debug==1:
-                print self.cycles,'SEI'
-            self.tick()
-            self.setflag('I')
-            
-        elif bytecode=='9c':
-            if self.debug==1:
-                print self.cycles, 
-            self.tick()
-            temp1=mem.read(self.reg_PB,hex(dec(self.reg_PC))[2:],hex(dec(self.reg_PC))[2:])
-            self.tick()
-            temp2=mem.read(self.reg_PB,hex(dec(self.reg_PC))[2:],hex(dec(self.reg_PC))[2:])
-            if self.debug==1:
-                print 'STZ(absolute) at ', self.reg_PB, temp2+temp1
-            self.tick()
-            mem.write(self.reg_PB, temp2+temp1, '00')
-
+        if bytecode in self.opcodes.dict:
+            self.opcodes.dict[bytecode](self, mem)                        
         else:
-            print 'CPU error: unknown opcode'
+            self.tick()
+            print 'CPU error: unknown opcode', bytecode
 
     def setflag(self,flag):
         if 'N' in flag:
@@ -181,7 +168,7 @@ class rom:
             return self.buffer[2*start_addr:2*end_addr+2]
         
 rom=rom()
-cpu=cpu(3580000)
+cpu=cpu()
 mem=mem()
 
 #boot sequence
