@@ -19,6 +19,7 @@ class cpu:
         self.opcodes=opcodes()
         self.debug=1
         self.speed=123
+        self.emulationmode=1
         self.cycles=0
         self.isrunning=0
         #CPU REGISTERS
@@ -33,19 +34,21 @@ class cpu:
         self.reg_PC='0000'   #program counter (memory address)
         print 'CPU Initialized'
 
-    def tick(self):
-        self.reg_PC=str(hex(dec(cpu.reg_PC)+1)[2:]) #incrementing the program counter
-        self.cycles+=1
+    def increment_PC(self, counter):
+        self.reg_PC=str(hex(dec(cpu.reg_PC)+counter)[2:]) #incrementing the program counter
+        while len(self.reg_PC)<4:
+            self.reg_PC='0'+self.reg_PC
         
     def start(self):
         self.reg_PC=rom.reset_vector
+        self.reg_S=mem.stackloc
         self.isrunning=1
         while self.isrunning==1:
             if self.debug==1:
-                print time.time(),
+                print time.time(), '0x'+cpu.reg_PC, 
+                if self.cycles>80:
+                    self.isrunning=0
             self.run(mem.read(self.reg_PB,self.reg_PC,self.reg_PC))
-            if self.cycles>30:
-                self.isrunning=0
 
     def show(self):
         print 'Accumulator register: ', self.reg_A
@@ -62,7 +65,7 @@ class cpu:
         if bytecode in self.opcodes.dict:
             self.opcodes.dict[bytecode](self, mem)                        
         else:
-            self.tick()
+            self.increment_PC(1)
             print 'CPU error: unknown opcode', bytecode
             
     def setflag(self, flag, clear=0):
@@ -101,6 +104,7 @@ class cpu:
         if 'E' in flag:
             temp=list(self.reg_P)
             #6502 emulation mode
+            temp[7]=str(int(not(clear)))
             self.reg_P="".join(temp)
         if 'B' in flag:
             #emulation mode only
@@ -110,6 +114,7 @@ class cpu:
 
 class mem:
     def __init__(self):
+        self.stackloc='0100'
         #00 to FF memory banks
         print 'Building SNES memory map...'
         self.mem=[]
@@ -156,6 +161,7 @@ class rom:
             rom.mode='hiROM'
             self.title=self.read('7FC0','7FD0').decode('hex')
         self.reset_vector=self.read('7FFD','7FFD')+self.read('7FFC','7FFC')
+        
 
     def read(self, start_addr, end_addr):
         if type(start_addr)==str and type(end_addr)==str:
