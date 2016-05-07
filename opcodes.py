@@ -16,6 +16,11 @@ class opcodes:
         self.dict['fb']=self.XCE
         self.dict['c2']=self.REP
         self.dict['5b']=self.TCD
+        self.dict['01']=self.ORA_dp_X_indirect
+        self.dict['1b']=self.TCS
+        self.dict['8f']=self.STA_long
+        self.dict['a2']=self.LDX_const
+        self.dict['a0']=self.LDY_const
         
     def stackpush(self, cpu, mem, val):
         mem.write('00', cpu.reg_S, val) #stack push
@@ -34,6 +39,68 @@ class opcodes:
             print val, 'pulled from ', cpu.reg_S
         return val
 
+    def LDX_const(self,cpu,mem):
+        cpu.cycles+=2
+        if cpu.debug==1:
+            print cpu.cycles, 'LDX(immediate)'
+        if cpu.reg_P[2]=='1':
+            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            cpu.reg_X=cpu.reg_X[0:2]+temp
+            cpu.increment_PC(2)
+        elif cpu.reg_P[2]=='0':
+            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            cpu.reg_X=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            cpu.increment_PC(3)
+        if dec(temp)==0:
+            cpu.setflag('Z')
+        elif bin(dec(temp))[2]==1:
+            cpu.setflag('N')
+
+    def LDY_const(self,cpu,mem):
+        cpu.cycles+=2
+        if cpu.debug==1:
+            print cpu.cycles, 'LDY(immediate)'
+        if cpu.reg_P[2]=='1':
+            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            cpu.reg_Y=cpu.reg_Y[0:2]+temp
+            cpu.increment_PC(2)
+        elif cpu.reg_P[2]=='0':
+            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            cpu.reg_Y=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            cpu.increment_PC(3)
+        if dec(temp)==0:
+            cpu.setflag('Z')
+        elif bin(dec(temp))[2]==1:
+            cpu.setflag('N')
+
+    def STA_long(self,cpu,mem):
+        cpu.cycles+=5
+        if cpu.reg_P[2]=='0':
+            cpu.cycles+=1
+        if cpu.debug==1:
+            print cpu.cycles, 'STA(abs,long)'
+        temp_pb=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+3))[2:],str(hex(dec(cpu.reg_PC)+3)[2:]))
+        mem.write(temp_pb, mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+2))[2:],str(hex(dec(cpu.reg_PC)+2)[2:]))+mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+1)[2:])), cpu.reg_A)
+        cpu.increment_PC(4)
+
+    def TCS(self,cpu,mem):
+        cpu.cycles+=2
+        if cpu.debug==1:
+            print cpu.cycles, 'TCS'
+        cpu.reg_S=cpu.reg_A
+        cpu.increment_PC(1)
+
+    def ORA_dp_X_indirect(self,cpu,mem):
+        cpu.cycles+=6
+        if cpu.debug==1:
+            print cpu.cycles, 'ORA(dp,X,indir)'
+        temp=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+2))[2:],str(hex(dec(cpu.reg_PC)+2)[2:]))+mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+1)[2:]))
+        print temp, cpu.reg_A
+        cpu.reg_A=hex(int(temp, 16) | int(cpu.reg_A, 16))[2:]
+        while len(cpu.reg_A)<4:
+            cpu.reg_A='0'+cpu.reg_A
+        cpu.increment_PC(2)
+        
     def TCD(self,cpu, mem):
         cpu.cycles+=2
         if cpu.debug==1:
@@ -140,15 +207,17 @@ class opcodes:
         if cpu.debug==1:
             print cpu.cycles,
         if cpu.reg_P[2]=='1':
-            cpu.reg_A=cpu.reg_A[0:2]+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
-        elif cpu.reg_P[2]=='0':
-            cpu.reg_A=cpu.reg_A[0:2]+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
-            cpu.reg_A=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+cpu.reg_A[2:4]
-        if cpu.reg_P[2]=='0':
-            cpu.increment_PC(3)
-        else:
+            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            cpu.reg_A=cpu.reg_A[0:2]+temp
             cpu.increment_PC(2)
-        cpu.setflag('MNZ')
+        elif cpu.reg_P[2]=='0':
+            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            cpu.reg_A=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            cpu.increment_PC(3)
+        if dec(temp)==0:
+            cpu.setflag('Z')
+        elif bin(dec(temp))[2]==1:
+            cpu.setflag('N')
         if cpu.debug==1:
             print 'LDA(immediate)'
 
