@@ -3,21 +3,16 @@ import binascii
 import sys
 import threading
 import time
-from opcodes import opcodes
+from opcodes import *
 
 ROMPATH="../SMW_rom.sfc"
 #ROMPATH="../test.txt"
-
-def dec(addr):
-    if type(addr)==int:
-        return addr
-    elif type(addr)==str:
-        return int(addr,16)
+CPUMAXCYCLES=9999
 
 class cpu:
     def __init__(self):
         self.opcodes=opcodes()
-        self.debug=1
+        self.debug=0
         self.speed=123
         self.emulationmode=1
         self.cycles=0
@@ -39,16 +34,17 @@ class cpu:
         while len(self.reg_PC)<4:
             self.reg_PC='0'+self.reg_PC
         
-    def start(self):
-        self.reg_PC=rom.reset_vector
-        self.reg_S=mem.stackloc
-        self.isrunning=1
+    def start(self, reset=0):
+        if reset==1:
+            self.reg_PC=rom.reset_vector
+            self.reg_S=mem.stackloc
+            self.isrunning=1
         t=time.time()
         while self.isrunning==1:
             if self.debug==1:
                 print time.time(), '0x'+cpu.reg_PC, 
             self.run(mem.read(self.reg_PB,self.reg_PC,self.reg_PC))
-            if self.cycles>=100:
+            if self.cycles>=CPUMAXCYCLES:
                 self.isrunning=0
         print cpu.cycles, 'CPU cycles completed in ', time.time()-t
 
@@ -63,13 +59,16 @@ class cpu:
         print 'Processor Flag register: ', self.reg_P
         print 'Program counter register: ', self.reg_PC
         
-    def run(self, bytecode):
-        if bytecode in self.opcodes.dict:
-            self.opcodes.dict[bytecode](self, mem)                        
+    def run(self, bytecode=''):
+        if bytecode=='':
+            cpu.start()
         else:
-            cpu.isrunning=0
-            print 'CPU error: unknown opcode', bytecode
-            
+            if bytecode in self.opcodes.dict:
+                self.opcodes.dict[bytecode](self, mem)                        
+            else:
+                cpu.isrunning=0
+                print 'CPU error: unknown opcode', bytecode
+        
     def setflag(self, flag, clear=0):
         if 'N' in flag:
             temp=list(self.reg_P)
@@ -181,4 +180,4 @@ mem=mem()
 
 #boot sequence
 print 'SNES started'
-cpu.start()
+cpu.start(reset=1)

@@ -4,6 +4,10 @@ def dec(addr):
     elif type(addr)==str:
         return int(addr,16)
 
+def reverse_endian(val):
+    if type(val)==str and len(val)>=4:
+        return val[2:]+val[:2]
+    
 class opcodes:
     def __init__(self):
         self.dict={}
@@ -21,23 +25,53 @@ class opcodes:
         self.dict['8f']=self.STA_long
         self.dict['a2']=self.LDX_const
         self.dict['a0']=self.LDY_const
-        
-    def stackpush(self, cpu, mem, val):
-        mem.write('00', cpu.reg_S, val) #stack push
-        if cpu.debug==1:
-            print val, 'pushed to ', cpu.reg_S
-        cpu.reg_S=str(hex(dec(cpu.reg_S)-1)[2:])
-        while len(cpu.reg_S)<4:
-            cpu.reg_S='0'+cpu.reg_S
+        self.dict['9f']=self.STA_long_X
+        self.dict['98']=self.TYA
 
-    def stackpull(self, cpu, mem):
-        cpu.reg_S=str(hex(dec(cpu.reg_S)+1)[2:])
-        val=mem.read('00', cpu.reg_S, cpu.reg_S)
-        while len(cpu.reg_S)<4:
-            cpu.reg_S='0'+cpu.reg_S
+    def TYA(self,cpu,mem):
+        cpu.cycles+=2
         if cpu.debug==1:
-            print val, 'pulled from ', cpu.reg_S
-        return val
+            print cpu.cycles, 'TYA'
+        if cpu.reg_P[2]=='1':
+            if cpu.reg_P[3]=='1':
+                cpu.reg_A[2:]=cpu.reg_Y[2:]
+                if "{0:08b}".format(int(cpu.reg_Y[2:],16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_Y[2:])==0:
+                    cpu.setflag('Z')
+            elif cpu.reg_P[3]=='0':
+                cpu.reg_A[2:]=cpu.reg_Y[2:]
+                if "{0:08b}".format(int(cpu.reg_Y[2:],16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_Y[2:])==0:
+                    cpu.setflag('Z')
+        elif cpu.reg_P[2]=='0':
+            if cpu.reg_P[3]=='1':
+                cpu.reg_A[2:]=cpu.reg_Y[2:]
+                cpu.reg_A[:2]='00'
+                if "{0:08b}".format(int(cpu.reg_Y[2:],16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_Y[2:])==0:
+                    cpu.setflag('Z')
+            elif cpu.reg_P[3]=='0':
+                cpu.reg_A=cpu.reg_Y
+                if "{0:016b}".format(int(cpu.reg_Y,16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_Y)==0:
+                    cpu.setflag('Z')
+        cpu.increment_PC(1)
+
+    def STA_long_X(self,cpu,mem):
+        cpu.cycles+=5
+        temp_pb=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+3))[2:],str(hex(dec(cpu.reg_PC)+3)[2:]))
+        temp_addr=reverse_endian(mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+2)[2:])))
+        temp_addr=hex(dec(temp_addr)+dec(cpu.reg_X))[2:]
+        mem.write(temp_pb, temp_addr, reverse_endian(cpu.reg_A))
+        if cpu.debug==1:
+            print cpu.cycles, 'STA(abs,long,X) at', temp_pb, temp_addr
+        if cpu.reg_P[2]=='0':
+            cpu.cycles+=1
+        cpu.increment_PC(4)
 
     def LDX_const(self,cpu,mem):
         cpu.cycles+=2
@@ -45,15 +79,15 @@ class opcodes:
             print cpu.cycles, 'LDX(immediate)'
         if cpu.reg_P[2]=='1':
             temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
-            cpu.reg_X=cpu.reg_X[0:2]+temp
+            cpu.reg_X=cpu.reg_X[:2]+temp
             cpu.increment_PC(2)
         elif cpu.reg_P[2]=='0':
-            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
-            cpu.reg_X=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            temp=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
+            cpu.reg_X=temp
             cpu.increment_PC(3)
         if dec(temp)==0:
             cpu.setflag('Z')
-        elif bin(dec(temp))[2]==1:
+        elif "{0:016b}".format(int(temp,16))[0]=='1':
             cpu.setflag('N')
 
     def LDY_const(self,cpu,mem):
@@ -62,25 +96,26 @@ class opcodes:
             print cpu.cycles, 'LDY(immediate)'
         if cpu.reg_P[2]=='1':
             temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
-            cpu.reg_Y=cpu.reg_Y[0:2]+temp
+            cpu.reg_Y=cpu.reg_Y[:2]+temp
             cpu.increment_PC(2)
         elif cpu.reg_P[2]=='0':
-            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
-            cpu.reg_Y=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            temp=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
+            cpu.reg_Y=temp
             cpu.increment_PC(3)
         if dec(temp)==0:
             cpu.setflag('Z')
-        elif bin(dec(temp))[2]==1:
+        elif "{0:016b}".format(int(temp,16))[0]=='1':
             cpu.setflag('N')
 
     def STA_long(self,cpu,mem):
         cpu.cycles+=5
         if cpu.reg_P[2]=='0':
             cpu.cycles+=1
-        if cpu.debug==1:
-            print cpu.cycles, 'STA(abs,long)'
         temp_pb=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+3))[2:],str(hex(dec(cpu.reg_PC)+3)[2:]))
-        mem.write(temp_pb, mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+2))[2:],str(hex(dec(cpu.reg_PC)+2)[2:]))+mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+1)[2:])), cpu.reg_A)
+        temp_addr=reverse_endian(mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+2)[2:])))
+        mem.write(temp_pb, temp_addr, reverse_endian(cpu.reg_A))
+        if cpu.debug==1:
+            print cpu.cycles, 'STA(abs,long) at', temp_pb, temp_addr
         cpu.increment_PC(4)
 
     def TCS(self,cpu,mem):
@@ -94,7 +129,7 @@ class opcodes:
         cpu.cycles+=6
         if cpu.debug==1:
             print cpu.cycles, 'ORA(dp,X,indir)'
-        temp=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+2))[2:],str(hex(dec(cpu.reg_PC)+2)[2:]))+mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+1)[2:]))
+        temp=reverse_endian(mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+2)[2:])))
         print temp, cpu.reg_A
         cpu.reg_A=hex(int(temp, 16) | int(cpu.reg_A, 16))[2:]
         while len(cpu.reg_A)<4:
@@ -174,7 +209,7 @@ class opcodes:
             cpu.setflag('D', clear=1)
             cpu.reg_PB='00'
             cpu.increment_PC(2)
-            cpu.reg_PC=mem.read(cpu.reg_PB, 'FFE7', 'FFE7')+mem.read(cpu.reg_PB, 'FFE6', 'FFE6')
+            cpu.reg_PC=reverse_endian(mem.read(cpu.reg_PB, 'FFE6', 'FFE7'))
         elif cpu.emulationmode==1:
             cpu.reg_PC=str(hex(dec(cpu.reg_PC)+2)[2:])
             self.stackpush(cpu, mem, cpu.reg_PC[2:])
@@ -183,7 +218,7 @@ class opcodes:
             self.stackpush(cpu, mem, hex(int(cpu.reg_P,2))[2:])
             cpu.setflag('I')
             cpu.increment_PC(2)
-            cpu.reg_PC=mem.read(cpu.reg_PB, 'FFFF', 'FFFF')+mem.read(cpu.reg_PB, 'FFFE', 'FFFE')
+            cpu.reg_PC=reverse_endian(mem.read(cpu.reg_PB, 'FFFE', 'FFFF'))
 
     def SEI(self,cpu, mem):
         cpu.cycles+=2
@@ -196,7 +231,7 @@ class opcodes:
         cpu.cycles+=4
         if cpu.debug==1:
             print cpu.cycles,
-        addr=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+2))[2:],str(hex(dec(cpu.reg_PC)+2))[2:])+mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+1))[2:])
+        addr=reverse_endian(mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+2))[2:]))
         if cpu.debug==1:
             print 'STZ(absolute) at ', cpu.reg_PB, addr
         mem.write(cpu.reg_PB, addr, '00')
@@ -211,14 +246,29 @@ class opcodes:
             cpu.reg_A=cpu.reg_A[0:2]+temp
             cpu.increment_PC(2)
         elif cpu.reg_P[2]=='0':
-            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
-            cpu.reg_A=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+2)[2:],hex(dec(cpu.reg_PC)+2)[2:])+mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            temp=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
+            cpu.reg_A=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
             cpu.increment_PC(3)
         if dec(temp)==0:
             cpu.setflag('Z')
         elif bin(dec(temp))[2]==1:
             cpu.setflag('N')
         if cpu.debug==1:
-            print 'LDA(immediate)'
+            print 'LDA(immediate) at ', temp
+        
+    def stackpush(self, cpu, mem, val):
+        mem.write('00', cpu.reg_S, val) #stack push
+        if cpu.debug==1:
+            print val, 'pushed to ', cpu.reg_S
+        cpu.reg_S=str(hex(dec(cpu.reg_S)-1)[2:])
+        while len(cpu.reg_S)<4:
+            cpu.reg_S='0'+cpu.reg_S
 
-            
+    def stackpull(self, cpu, mem):
+        cpu.reg_S=str(hex(dec(cpu.reg_S)+1)[2:])
+        val=mem.read('00', cpu.reg_S, cpu.reg_S)
+        while len(cpu.reg_S)<4:
+            cpu.reg_S='0'+cpu.reg_S
+        if cpu.debug==1:
+            print val, 'pulled from ', cpu.reg_S
+        return val
