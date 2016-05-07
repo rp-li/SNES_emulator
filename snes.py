@@ -7,12 +7,13 @@ from opcodes import *
 
 ROMPATH="../SMW_rom.sfc"
 #ROMPATH="../test.txt"
-CPUMAXCYCLES=9999
+CPUMAXCYCLES=999999
 
 class cpu:
     def __init__(self):
         self.opcodes=opcodes()
-        self.debug=1
+        self.debug=0
+        self.vdebug=0
         self.speed=123
         self.emulationmode=1
         self.cycles=0
@@ -42,22 +43,27 @@ class cpu:
         t=time.time()
         while self.isrunning==1:
             if self.debug==1:
-                print time.time(), '0x'+cpu.reg_PC, 
+                print time.time(), '0x'+cpu.reg_PC,
             self.run(mem.read(self.reg_PB,self.reg_PC,self.reg_PC))
             if self.cycles>=CPUMAXCYCLES:
                 self.isrunning=0
-        print cpu.cycles, 'CPU cycles completed in ', time.time()-t
+            if self.vdebug==1:
+                self.show()
+        if self.vdebug==0:
+            print cpu.cycles, 'CPU cycles completed in ', time.time()-t
 
     def show(self):
+        print ''
+        print '6502 emulation mode:', self.emulationmode
         print 'Accumulator register: ', self.reg_A
         print 'X index register: ', self.reg_X
         print 'Y index register: ', self.reg_Y
         print 'Stack Pointer register: ', self.reg_S
-        print 'Data Bank register: ', self.reg_DB
+        print 'Data bank register: ', self.reg_DB
         print 'Direct Page register: ', self.reg_D
         print 'Program Bank register: ', self.reg_PB
         print 'Processor Flag register: ', self.reg_P
-        print 'Program counter register: ', self.reg_PC
+        print 'Program Counter register: ', self.reg_PC
         
     def run(self, bytecode=''):
         if bytecode=='':
@@ -68,13 +74,15 @@ class cpu:
                 self.opcodes.dict[bytecode](self, mem)                        
             else:
                 cpu.isrunning=0
-                print 'CPU halted: unknown opcode', bytecode
+                #print 'CPU halted: unknown opcode', bytecode
         
     def setflag(self, flag, clear=0):
         if 'N' in flag:
             temp=list(self.reg_P)
             temp[0]=str(int(not(clear)))
             self.reg_P="".join(temp)
+            if self.debug==1 and clear==0:
+                print 'N flag set'
         if 'V' in flag:
             temp=list(self.reg_P)
             temp[1]=str(int(not(clear)))

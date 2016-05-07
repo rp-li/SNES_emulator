@@ -1,4 +1,7 @@
-def dec(addr):
+def binary(val): #hex to bin
+    return "{0:00b}".format(int(val,16))
+
+def dec(addr):  #hex to dec
     if type(addr)==int:
         return addr
     elif type(addr)==str:
@@ -34,6 +37,25 @@ def checkborrow(a,b):
         return True
     else:
         return False
+
+def twos_to_dec(a, nbits):  #a in binary string, unsigned
+    sign=1
+    if a[0]=='1':
+        sign=-1
+        a=int(a,base=2)
+        mask=2**nbits-1
+        a=~a&mask
+        a+=1
+        return sign*int(bin(a)[-(nbits-1):],base=2)
+    elif a[0]=='0':
+        return int(a,base=2)
+   
+
+def binsubtract(a,b): #a and b are binary strings, two's complement
+    mask=0xffff
+    b=int(b,base=2)
+    b=bin(int(bin(b^mask),base=2)+1)[2:]
+    return bin(int(a,2) + int(b,2))[-16:]
     
 class opcodes:
     def __init__(self):
@@ -53,31 +75,59 @@ class opcodes:
         self.dict['a0']=self.LDY_const
         self.dict['8f']=self.STA_long
         self.dict['9f']=self.STA_long_X
+        self.dict['8d']=self.STA_addr
         self.dict['98']=self.TYA
         self.dict['38']=self.SEC
         self.dict['e9']=self.SBC_const
         self.dict['a8']=self.TAY
         self.dict['ca']=self.DEX
+        self.dict['10']=self.BPL
 
-    def DEX(self,cpu,mem):
+    def BPL(self,cpu,mem):
+        cpu.cycles+=2
+        #print cpu.reg_PC
+        if cpu.emulationmode==1:
+            cpu.cycles+=1
+        if cpu.reg_P[0]=='0':
+            cpu.cycles+=1
+            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])  
+            temp=temp.zfill(4)
+            #print temp
+            cpu.increment_PC(2)
+            cpu.reg_PC=hex(dec(cpu.reg_PC)+twos_to_dec(binary(temp),8))[2:]
+            if cpu.debug==1:
+                print cpu.cycles, 'BPL of (dec)', twos_to_dec(binary(temp),8)
+        else:
+            cpu.increment_PC(2)
+        if cpu.debug==1:
+            print cpu.cycles, 'BPL (no branch)'
+
+    def DEX(self,cpu,mem): #DEX not working if X register goes into the negatives
+        #print cpu.reg_X
         cpu.cycles+=2
         if cpu.debug==1:
             print cpu.cycles, 'DEX'
         if cpu.reg_P[2]=='0':
-            cpu.reg_X=hex(dec(cpu.reg_X)-1)[2:].zfill(4)
-            if bin(int(cpu.reg_X, base=16))[2:].zfill(4)[0]=='1':
+            if cpu.reg_X=='0000':
+                cpu.reg_X='ffff'
+            else:
+                cpu.reg_X=hex(dec(cpu.reg_X)-1)[2:].zfill(4)
+            if bin(int(cpu.reg_X, base=16))[2:].zfill(16)[0]=='1':
                 cpu.setflag('N')
             elif int(cpu.reg_X, base=16)==0:
                 cpu.setflag('Z')
-        elif cpu.reg_P[2]=='1':
-            cpu.reg_X=cpu.reg_X[:2]+hex(dec(cpu.reg_X[2:])-1)[2:].zfill(2)
-            if bin(int(cpu.reg_X[2:], base=16))[2:].zfill(2)[0]=='1':
+        elif cpu.emulationmode==1 or cpu.reg_P[2]=='1':
+            if cpu.reg_X=='0000':
+                cpu.reg_X='ffff'
+            else:
+                cpu.reg_X=cpu.reg_X[:2]+hex(dec(cpu.reg_X[2:])-1)[2:].zfill(2)
+            if bin(int(cpu.reg_X[2:], base=16))[2:].zfill(8)[0]=='1':
                 cpu.setflag('N')
             elif int(cpu.reg_X[2:], base=16)==0:
                 cpu.setflag('Z')
         cpu.increment_PC(1)
 
-    def SBC_const(self,cpu,mem): #this is broken for BCD mode
+    def SBC_const(self,cpu,mem): #this is broken for negative results
         cpu.cycles+=2
         if cpu.debug==1:
             print cpu.cycles, 'SBC(immediate)'
@@ -85,13 +135,17 @@ class opcodes:
             if cpu.reg_P[4]=='0': #non decimal
                 temp_a=dec(cpu.reg_A)
                 temp_b=dec(reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:])))
+                if temp_a<temp_b:
+                    print '###subtraction just wewnt negative here, expect problems'
                 cpu.reg_A=hex(temp_a-temp_b)[2:].zfill(4)[-4:]
             elif cpu.reg_P[4]=='1':
                 temp_a=hextobcd_decimal(cpu.reg_A)
                 temp_b=hextobcd_decimal(reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:])))
                 cpu.reg_A=hex(int(dectobcd_binary(temp_a-temp_b),base=2)).zfill(4)[-4:]
-            if checkborrow(temp_a, temp_b):
-                cpu.setflag('B')
+                if temp_a<temp_b:
+                    print '###subtraction just wewnt negative here, expect problems'
+            #if checkborrow(temp_a, temp_b):
+            #    cpu.setflag('B')
             if bin(dec(cpu.reg_A))[2]==1:
                 cpu.setflag('N')
             elif dec(cpu.reg_A)==0:
@@ -100,14 +154,18 @@ class opcodes:
             if temp_a-temp_b>32767 or temp_a-temp_b<-32768:
                 cpu.setflag('V')                   
             cpu.increment_PC(3)
-        elif cpu.reg_P[2]=='1':
+        elif cpu.emulationmode==1 or cpu.reg_P[2]=='1':
             if cpu.reg_P[4]=='0':
                 temp_a=dec(cpu.reg_A[2:])
                 temp_b=dec(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:]))
                 cpu.reg_A=cpu.reg_A[:2]+hex(temp_a-temp_b)[2:].zfill(2)[-2:]   
+                if temp_a<temp_b:
+                    print '###subtraction just wewnt negative here, expect problems'
             if cpu.reg_P[4]=='1':
                 temp_a=hextobcd_decimal(cpu.reg_A[2:])
                 temp_b=hextobcd_decimal(reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],str(hex(dec(cpu.reg_PC)+1))[2:])))
+                if temp_a<temp_b:
+                    print '###subtraction just wewnt negative here, expect problems'
                 cpu.reg_A=cpu.reg_A[:2]+hex(int(dectobcd_binary(temp_a-temp_b),base=2)).zfill(2)[-2:]
             if checkborrow(temp_a, temp_b):
                 cpu.setflag('B')            
@@ -177,10 +235,10 @@ class opcodes:
                 if dec(cpu.reg_A[2:])==0:
                     cpu.setflag('Z')
             elif cpu.reg_P[3]=='0':
-                cpu.reg_A=cpu.reg_Y
-                if "{0:016b}".format(int(cpu.reg_Y,16))[0]=='1':
+                cpu.reg_Y=cpu.reg_A
+                if "{0:016b}".format(int(cpu.reg_A,16))[0]=='1':
                     cpu.setflag('N')
-                if dec(cpu.reg_Y)==0:
+                if dec(cpu.reg_A)==0:
                     cpu.setflag('Z')
         cpu.increment_PC(1)
 
@@ -206,6 +264,18 @@ class opcodes:
         if cpu.reg_P[2]=='0':
             cpu.cycles+=1
         cpu.increment_PC(4)
+
+    def STA_addr(self,cpu,mem):
+        cpu.cycles+=4
+        temp_addr=reverse_endian(mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+2)[2:])))
+        if cpu.emulationmode==1 or cpu.reg_P[2]=='1':
+            mem.write(cpu.reg_PB, temp_addr, cpu.reg_A[2:])
+        else:
+            cpu.cycles+=1
+            mem.write(cpu.reg_PB, temp_addr, reverse_endian(cpu.reg_A))
+        if cpu.debug==1:
+            print cpu.cycles, 'STA(abs) at', temp_addr    
+        cpu.increment_PC(3)
         
     def LDX_const(self,cpu,mem):
         cpu.cycles+=2
@@ -274,8 +344,6 @@ class opcodes:
             
     def REP(self,cpu, mem):
         cpu.cycles+=3
-        if cpu.debug==1:
-            print cpu.cycles, 'REP'
         temp=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1)), str(hex(dec(cpu.reg_PC)+1)))
         temp="{0:08b}".format(int(temp,16))
         temp_regP=list(cpu.reg_P)
@@ -283,6 +351,8 @@ class opcodes:
             if temp[i]=='1':
                 temp_regP[i]='0'
         cpu.reg_P=''.join(temp_regP)
+        if cpu.debug==1:
+            print cpu.cycles, 'REP', temp
         cpu.increment_PC(2)
 
     def CLC(self,cpu, mem):
@@ -296,10 +366,10 @@ class opcodes:
         cpu.cycles+=2
         if cpu.debug==1:
             print cpu.cycles, 'XCE'
-        if cpu.reg_P[7]==1:
-            self.emulationmode=1
-        elif cpu.reg_P[7]==0:
-            self.emulationmode=0
+        if cpu.reg_P[7]=='1':
+            cpu.emulationmode=1
+        elif cpu.reg_P[7]=='0':
+            cpu.emulationmode=0
             cpu.setflag('MX')
         cpu.increment_PC(1)
     
@@ -369,7 +439,7 @@ class opcodes:
         cpu.cycles+=2
         if cpu.debug==1:
             print cpu.cycles,
-        if cpu.reg_P[2]=='1':
+        if cpu.emulationmode==1 or cpu.reg_P[2]=='1':
             temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
             cpu.reg_A=cpu.reg_A[0:2]+temp
             cpu.increment_PC(2)
