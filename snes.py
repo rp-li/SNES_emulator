@@ -12,7 +12,7 @@ CPUMAXCYCLES=9999
 class cpu:
     def __init__(self):
         self.opcodes=opcodes()
-        self.debug=0
+        self.debug=1
         self.speed=123
         self.emulationmode=1
         self.cycles=0
@@ -61,13 +61,14 @@ class cpu:
         
     def run(self, bytecode=''):
         if bytecode=='':
+            self.isrunning=1
             cpu.start()
         else:
             if bytecode in self.opcodes.dict:
                 self.opcodes.dict[bytecode](self, mem)                        
             else:
                 cpu.isrunning=0
-                print 'CPU error: unknown opcode', bytecode
+                print 'CPU halted: unknown opcode', bytecode
         
     def setflag(self, flag, clear=0):
         if 'N' in flag:

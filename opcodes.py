@@ -4,9 +4,36 @@ def dec(addr):
     elif type(addr)==str:
         return int(addr,16)
 
+def hextobcd_decimal(val):
+    #val in big endian
+    val=bin(int(val, base=16))[2:].zfill(16)
+    bcds={'0000':'0','0001':'1','0010':'2','0011':'3','0100':'4','0101':'5',
+          '0110':'6','0111':'7','1000':'8','1001':'9'}
+    out=''
+    for i in range(0,len(val),4):
+        out=out+bcds[val[i:i+4]]
+    return int(out, base=10)
+
+def dectobcd_binary(val):
+    bcds=['0000','0001','0010','0011','0100','0101',
+          '0110','0111','1000','1001']
+    val=str(val)
+    out=''
+    for i in range(len(val)):
+        out=out+bcds[int(val[i],base=10)]
+    return out
+
 def reverse_endian(val):
     if type(val)==str and len(val)>=4:
         return val[2:]+val[:2]
+
+def checkborrow(a,b):
+    mask=0xffff
+    not_a=~a&mask
+    if not_a&(a^b)!=0:
+        return True
+    else:
+        return False
     
 class opcodes:
     def __init__(self):
@@ -22,11 +49,75 @@ class opcodes:
         self.dict['5b']=self.TCD
         self.dict['01']=self.ORA_dp_X_indirect
         self.dict['1b']=self.TCS
-        self.dict['8f']=self.STA_long
         self.dict['a2']=self.LDX_const
         self.dict['a0']=self.LDY_const
+        self.dict['8f']=self.STA_long
         self.dict['9f']=self.STA_long_X
         self.dict['98']=self.TYA
+        self.dict['38']=self.SEC
+        self.dict['e9']=self.SBC_const
+        self.dict['a8']=self.TAY
+        self.dict['ca']=self.DEX
+
+    def DEX(self,cpu,mem):
+        cpu.cycles+=2
+        if cpu.debug==1:
+            print cpu.cycles, 'DEX'
+        if cpu.reg_P[2]=='0':
+            cpu.reg_X=hex(dec(cpu.reg_X)-1)[2:].zfill(4)
+            if bin(int(cpu.reg_X, base=16))[2:].zfill(4)[0]=='1':
+                cpu.setflag('N')
+            elif int(cpu.reg_X, base=16)==0:
+                cpu.setflag('Z')
+        elif cpu.reg_P[2]=='1':
+            cpu.reg_X=cpu.reg_X[:2]+hex(dec(cpu.reg_X[2:])-1)[2:].zfill(2)
+            if bin(int(cpu.reg_X[2:], base=16))[2:].zfill(2)[0]=='1':
+                cpu.setflag('N')
+            elif int(cpu.reg_X[2:], base=16)==0:
+                cpu.setflag('Z')
+        cpu.increment_PC(1)
+
+    def SBC_const(self,cpu,mem): #this is broken for BCD mode
+        cpu.cycles+=2
+        if cpu.debug==1:
+            print cpu.cycles, 'SBC(immediate)'
+        if cpu.reg_P[2]=='0':
+            if cpu.reg_P[4]=='0': #non decimal
+                temp_a=dec(cpu.reg_A)
+                temp_b=dec(reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:])))
+                cpu.reg_A=hex(temp_a-temp_b)[2:].zfill(4)[-4:]
+            elif cpu.reg_P[4]=='1':
+                temp_a=hextobcd_decimal(cpu.reg_A)
+                temp_b=hextobcd_decimal(reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:])))
+                cpu.reg_A=hex(int(dectobcd_binary(temp_a-temp_b),base=2)).zfill(4)[-4:]
+            if checkborrow(temp_a, temp_b):
+                cpu.setflag('B')
+            if bin(dec(cpu.reg_A))[2]==1:
+                cpu.setflag('N')
+            elif dec(cpu.reg_A)==0:
+                cpu.setflag('Z')
+            #might need to recheck overflow and negative condition
+            if temp_a-temp_b>32767 or temp_a-temp_b<-32768:
+                cpu.setflag('V')                   
+            cpu.increment_PC(3)
+        elif cpu.reg_P[2]=='1':
+            if cpu.reg_P[4]=='0':
+                temp_a=dec(cpu.reg_A[2:])
+                temp_b=dec(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:]))
+                cpu.reg_A=cpu.reg_A[:2]+hex(temp_a-temp_b)[2:].zfill(2)[-2:]   
+            if cpu.reg_P[4]=='1':
+                temp_a=hextobcd_decimal(cpu.reg_A[2:])
+                temp_b=hextobcd_decimal(reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],str(hex(dec(cpu.reg_PC)+1))[2:])))
+                cpu.reg_A=cpu.reg_A[:2]+hex(int(dectobcd_binary(temp_a-temp_b),base=2)).zfill(2)[-2:]
+            if checkborrow(temp_a, temp_b):
+                cpu.setflag('B')            
+            if bin(dec(cpu.reg_A[2:]))[2]==1:
+                cpu.setflag('N')
+            elif dec(cpu.reg_A[2:])==0:
+                cpu.setflag('Z')
+            if temp_a-temp_b>127 or temp_a-temp_b<-128:
+                cpu.setflag('V')
+            cpu.increment_PC(2)
 
     def TYA(self,cpu,mem):
         cpu.cycles+=2
@@ -61,6 +152,38 @@ class opcodes:
                     cpu.setflag('Z')
         cpu.increment_PC(1)
 
+    def TAY(self,cpu,mem):
+        cpu.cycles+=2
+        if cpu.debug==1:
+            print cpu.cycles, 'TAY'
+        if cpu.reg_P[2]=='1':
+            if cpu.reg_P[3]=='1':
+                cpu.reg_Y[2:]=cpu.reg_A[2:]
+                if "{0:08b}".format(int(cpu.reg_A[2:],16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_A[2:])==0:
+                    cpu.setflag('Z')
+            elif cpu.reg_P[3]=='0':
+                cpu.reg_Y=cpu.reg_A
+                if "{0:08b}".format(int(cpu.reg_A,16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_A)==0:
+                    cpu.setflag('Z')
+        elif cpu.reg_P[2]=='0':
+            if cpu.reg_P[3]=='1':
+                cpu.reg_Y[2:]=cpu.reg_A[2:]
+                if "{0:08b}".format(int(cpu.reg_A[2:],16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_A[2:])==0:
+                    cpu.setflag('Z')
+            elif cpu.reg_P[3]=='0':
+                cpu.reg_A=cpu.reg_Y
+                if "{0:016b}".format(int(cpu.reg_Y,16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_Y)==0:
+                    cpu.setflag('Z')
+        cpu.increment_PC(1)
+
     def STA_long_X(self,cpu,mem):
         cpu.cycles+=5
         temp_pb=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+3))[2:],str(hex(dec(cpu.reg_PC)+3)[2:]))
@@ -73,6 +196,17 @@ class opcodes:
             cpu.cycles+=1
         cpu.increment_PC(4)
 
+    def STA_long(self,cpu,mem):
+        cpu.cycles+=5
+        temp_pb=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+3))[2:],str(hex(dec(cpu.reg_PC)+3)[2:]))
+        temp_addr=reverse_endian(mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+2)[2:])))
+        mem.write(temp_pb, temp_addr, reverse_endian(cpu.reg_A))
+        if cpu.debug==1:
+            print cpu.cycles, 'STA(abs,long) at', temp_pb, temp_addr
+        if cpu.reg_P[2]=='0':
+            cpu.cycles+=1
+        cpu.increment_PC(4)
+        
     def LDX_const(self,cpu,mem):
         cpu.cycles+=2
         if cpu.debug==1:
@@ -107,17 +241,6 @@ class opcodes:
         elif "{0:016b}".format(int(temp,16))[0]=='1':
             cpu.setflag('N')
 
-    def STA_long(self,cpu,mem):
-        cpu.cycles+=5
-        if cpu.reg_P[2]=='0':
-            cpu.cycles+=1
-        temp_pb=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+3))[2:],str(hex(dec(cpu.reg_PC)+3)[2:]))
-        temp_addr=reverse_endian(mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+2)[2:])))
-        mem.write(temp_pb, temp_addr, reverse_endian(cpu.reg_A))
-        if cpu.debug==1:
-            print cpu.cycles, 'STA(abs,long) at', temp_pb, temp_addr
-        cpu.increment_PC(4)
-
     def TCS(self,cpu,mem):
         cpu.cycles+=2
         if cpu.debug==1:
@@ -131,9 +254,7 @@ class opcodes:
             print cpu.cycles, 'ORA(dp,X,indir)'
         temp=reverse_endian(mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1))[2:],str(hex(dec(cpu.reg_PC)+2)[2:])))
         print temp, cpu.reg_A
-        cpu.reg_A=hex(int(temp, 16) | int(cpu.reg_A, 16))[2:]
-        while len(cpu.reg_A)<4:
-            cpu.reg_A='0'+cpu.reg_A
+        cpu.reg_A=hex(int(temp, 16) | int(cpu.reg_A, 16))[2:].zfill(4)
         cpu.increment_PC(2)
         
     def TCD(self,cpu, mem):
@@ -226,6 +347,13 @@ class opcodes:
             print cpu.cycles,'SEI'
         cpu.setflag('I')
         cpu.increment_PC(1)
+
+    def SEC(self,cpu, mem):
+        cpu.cycles+=2
+        if cpu.debug==1:
+            print cpu.cycles,'SEC'
+        cpu.setflag('C')
+        cpu.increment_PC(1)    
     
     def STZ_addr(self,cpu, mem):
         cpu.cycles+=4
@@ -254,21 +382,19 @@ class opcodes:
         elif bin(dec(temp))[2]==1:
             cpu.setflag('N')
         if cpu.debug==1:
-            print 'LDA(immediate) at ', temp
+            print 'LDA(immediate)'
         
     def stackpush(self, cpu, mem, val):
         mem.write('00', cpu.reg_S, val) #stack push
         if cpu.debug==1:
             print val, 'pushed to ', cpu.reg_S
-        cpu.reg_S=str(hex(dec(cpu.reg_S)-1)[2:])
+        cpu.reg_S=hex(dec(cpu.reg_S)-1)[2:].zfill(4)
         while len(cpu.reg_S)<4:
             cpu.reg_S='0'+cpu.reg_S
 
     def stackpull(self, cpu, mem):
-        cpu.reg_S=str(hex(dec(cpu.reg_S)+1)[2:])
+        cpu.reg_S=hex(dec(cpu.reg_S)+1)[2:].zfill(4)
         val=mem.read('00', cpu.reg_S, cpu.reg_S)
-        while len(cpu.reg_S)<4:
-            cpu.reg_S='0'+cpu.reg_S
         if cpu.debug==1:
             print val, 'pulled from ', cpu.reg_S
         return val
