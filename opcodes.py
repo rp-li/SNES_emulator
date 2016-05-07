@@ -1,3 +1,8 @@
+#################################################################
+#  file containing 65816 CPU opcodes
+#  also includs a few useful bit manipulation functions
+#################################################################
+
 def binary(val): #hex to bin
     return "{0:00b}".format(int(val,16))
 
