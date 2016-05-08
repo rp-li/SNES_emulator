@@ -1,6 +1,6 @@
 ######################################################################
 #  Main thread
-#  Will implement different threads for CPU and PPu later on
+#  Will implement different threads for CPU and PPU later on
 #
 ######################################################################
 
@@ -13,7 +13,7 @@ from opcodes import *
 
 ROMPATH="../SMW_rom.sfc"
 #ROMPATH="../test.txt"
-CPUMAXCYCLES=999999
+CPUMAXCYCLES=4080
 
 class cpu:
     def __init__(self):
@@ -80,7 +80,7 @@ class cpu:
                 self.opcodes.dict[bytecode](self, mem)                        
             else:
                 cpu.isrunning=0
-                #print 'CPU halted: unknown opcode', bytecode
+                print 'CPU halted: unknown opcode', bytecode
         
     def setflag(self, flag, clear=0):
         if 'N' in flag:
@@ -159,8 +159,7 @@ class mem:
             for i in range(len(val)/2):
                 self.mem[bank][addr]=val[2*i:2*i+2]
                 addr+=1
-        elif type(bank)==str:
-            
+        elif type(bank)==str:           
             for i in range(len(val)/2):
                 self.mem[dec(bank)][addr]=val[2*i:2*i+2]
                 addr+=1

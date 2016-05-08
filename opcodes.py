@@ -3,6 +3,22 @@
 #  also includs a few useful bit manipulation functions
 #################################################################
 
+        
+def stackpush(cpu, mem, val):    #only pushes 1 byte at a time
+    mem.write('00', cpu.reg_S, val) #stack push
+    if cpu.debug==1:
+        print val, 'pushed to ', cpu.reg_S
+    cpu.reg_S=hex(dec(cpu.reg_S)-1)[2:].zfill(4)
+    while len(cpu.reg_S)<4:
+        cpu.reg_S='0'+cpu.reg_S
+
+def stackpull(cpu, mem):
+    cpu.reg_S=hex(dec(cpu.reg_S)+1)[2:].zfill(4)
+    val=mem.read('00', cpu.reg_S, cpu.reg_S)
+    if cpu.debug==1:
+        print val, 'pulled from ', cpu.reg_S
+    return val
+
 def binary(val): #hex to bin
     return "{0:00b}".format(int(val,16))
 
@@ -87,6 +103,59 @@ class opcodes:
         self.dict['a8']=self.TAY
         self.dict['ca']=self.DEX
         self.dict['10']=self.BPL
+        self.dict['e2']=self.SEP
+        self.dict['20']=self.JSR_addr
+        self.dict['08']=self.PHP
+        self.dict['cd']=self.CMP_addr
+
+    def CMP_addr(self,cpu,mem):
+        cpu.cycles+=4
+        temp_addr=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
+        if cpu.debug==1:
+            print cpu.cycles, 'CMP(abs) at', temp_addr
+        if cpu.reg_P[2]=='0':
+            cpu.cycles+=1
+            temp_val=reverse_endian(mem.read(cpu.reg_PB,dec(temp_addr),dec(temp_addr)+1))
+            temp_res=dec(cpu.reg_A)-dec(temp_val)
+            temp_res=hex(temp_res)[2:].zfill(4)
+            if bin(int(temp_res,base=16)).zfill(16)[2:][0]=='1':
+                cpu.setflag('N')
+            elif int(temp_res, base=16)==0:
+                cpu.setflag('Z')
+            if int(cpu.reg_A,base=16)<int(temp_val, base=16):
+                cpu.setflag('C', clear=1)
+            else:
+                cpu.setflag('C')                
+        elif cpu.reg_P[2]=='1':
+            temp_val=mem.read(cpu.reg_PB,dec(temp_addr),dec(temp_addr))
+            temp_res=dec(cpu.reg_A[2:])-dec(temp_val)
+            temp_res=hex(temp_res)[2:].zfill(2)
+            if bin(int(temp_res,base=16)).zfill(8)[2:][0]=='1':
+                cpu.setflag('N')
+            elif int(temp_res, base=16)==0:
+                cpu.setflag('Z')
+            if int(cpu.reg_A[2:],base=16)<int(temp_val, base=16):
+                cpu.setflag('C', clear=1)
+            else:
+                cpu.setflag('C')               
+        print temp_val, temp_res, cpu.reg_A
+        cpu.increment_PC(3)
+        
+    def PHP(self,cpu,mem):
+        cpu.cycles+=3
+        if cpu.debug==1:
+            print cpu.cycles, 'PHP'
+        temp=hex(int('10110111',base=2))[2:]
+        stackpush(cpu,mem,temp)
+        cpu.increment_PC(1)
+
+    def JSR_addr(self,cpu,mem):
+        cpu.cycles+=6
+        if cpu.debug==1:
+            print cpu.cycles, 'JSR(abs)'
+        stackpush(cpu, mem, cpu.reg_PC[2:])
+        stackpush(cpu, mem, cpu.reg_PC[:2])
+        cpu.reg_PC=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
 
     def BPL(self,cpu,mem):
         cpu.cycles+=2
@@ -104,10 +173,10 @@ class opcodes:
                 print cpu.cycles, 'BPL of (dec)', twos_to_dec(binary(temp),8)
         else:
             cpu.increment_PC(2)
-        if cpu.debug==1:
-            print cpu.cycles, 'BPL (no branch)'
+            if cpu.debug==1:
+                print cpu.cycles, 'BPL (no branch)'
 
-    def DEX(self,cpu,mem): #DEX not working if X register goes into the negatives
+    def DEX(self,cpu,mem):
         #print cpu.reg_X
         cpu.cycles+=2
         if cpu.debug==1:
@@ -132,7 +201,7 @@ class opcodes:
                 cpu.setflag('Z')
         cpu.increment_PC(1)
 
-    def SBC_const(self,cpu,mem): #this is broken for negative results
+    def SBC_const(self,cpu,mem): #this is broken for negative results, need to recheck borrow bit C
         cpu.cycles+=2
         if cpu.debug==1:
             print cpu.cycles, 'SBC(immediate)'
@@ -360,6 +429,19 @@ class opcodes:
             print cpu.cycles, 'REP', temp
         cpu.increment_PC(2)
 
+    def SEP(self,cpu, mem):
+        cpu.cycles+=3
+        temp=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+1)), str(hex(dec(cpu.reg_PC)+1)))
+        temp="{0:08b}".format(int(temp,16))
+        temp_regP=list(cpu.reg_P)
+        for i in range(len(temp)):
+            if temp[i]=='1':
+                temp_regP[i]='1'
+        cpu.reg_P=''.join(temp_regP)
+        if cpu.debug==1:
+            print cpu.cycles, 'SEP', temp
+        cpu.increment_PC(2)
+
     def CLC(self,cpu, mem):
         cpu.cycles+=2
         if cpu.debug==1:
@@ -458,18 +540,4 @@ class opcodes:
             cpu.setflag('N')
         if cpu.debug==1:
             print 'LDA(immediate)'
-        
-    def stackpush(self, cpu, mem, val):
-        mem.write('00', cpu.reg_S, val) #stack push
-        if cpu.debug==1:
-            print val, 'pushed to ', cpu.reg_S
-        cpu.reg_S=hex(dec(cpu.reg_S)-1)[2:].zfill(4)
-        while len(cpu.reg_S)<4:
-            cpu.reg_S='0'+cpu.reg_S
 
-    def stackpull(self, cpu, mem):
-        cpu.reg_S=hex(dec(cpu.reg_S)+1)[2:].zfill(4)
-        val=mem.read('00', cpu.reg_S, cpu.reg_S)
-        if cpu.debug==1:
-            print val, 'pulled from ', cpu.reg_S
-        return val
