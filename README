@@ -7,5 +7,5 @@ Partially implemented:
 
 Planned but currently unimplemented:
 -SPC700 audio co-processor opcodes
--Frame buffers
+-Frame buffers and everything video
 -Support for LoROM
