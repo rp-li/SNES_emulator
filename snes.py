@@ -11,14 +11,16 @@ import threading
 import time
 from opcodes import *
 
+#NOTE: CPU REGISTER ENDIANS ARE BIG
+
 ROMPATH="../SMW_rom.sfc"
 #ROMPATH="../test.txt"
-CPUMAXCYCLES=4080
+CPUMAXCYCLES=49080
 
 class cpu:
     def __init__(self):
         self.opcodes=opcodes()
-        self.debug=0
+        self.debug=1
         self.vdebug=0
         self.speed=123
         self.emulationmode=1
@@ -83,12 +85,15 @@ class cpu:
                 print 'CPU halted: unknown opcode', bytecode
         
     def setflag(self, flag, clear=0):
+        if self.debug==1:
+            if clear==0:
+                print flag, 'flags set'
+            elif clear==1:
+                print flag, 'flags cleared'
         if 'N' in flag:
             temp=list(self.reg_P)
             temp[0]=str(int(not(clear)))
             self.reg_P="".join(temp)
-            if self.debug==1 and clear==0:
-                print 'N flag set'
         if 'V' in flag:
             temp=list(self.reg_P)
             temp[1]=str(int(not(clear)))

@@ -1,10 +1,10 @@
 #################################################################
 #  file containing 65816 CPU opcodes
-#  also includs a few useful bit manipulation functions
+#  also includes a few useful bit manipulation functions
 #################################################################
 
         
-def stackpush(cpu, mem, val):    #only pushes 1 byte at a time
+def stackpush(cpu, mem, val):    #only pushes 1 byte at a time, normally stackpushes high byte first then low
     mem.write('00', cpu.reg_S, val) #stack push
     if cpu.debug==1:
         print val, 'pushed to ', cpu.reg_S
@@ -60,14 +60,13 @@ def checkborrow(a,b):
         return False
 
 def twos_to_dec(a, nbits):  #a in binary string, unsigned
-    sign=1
+    a=a.zfill(nbits)
     if a[0]=='1':
-        sign=-1
         a=int(a,base=2)
         mask=2**nbits-1
         a=~a&mask
         a+=1
-        return sign*int(bin(a)[-(nbits-1):],base=2)
+        return -int(bin(a)[-(nbits-1):],base=2)
     elif a[0]=='0':
         return int(a,base=2)
    
@@ -103,11 +102,28 @@ class opcodes:
         self.dict['a8']=self.TAY
         self.dict['ca']=self.DEX
         self.dict['10']=self.BPL
+        self.dict['d0']=self.BNE
+        self.dict['80']=self.BRA
         self.dict['e2']=self.SEP
         self.dict['20']=self.JSR_addr
         self.dict['08']=self.PHP
+        self.dict['48']=self.PHA
         self.dict['cd']=self.CMP_addr
+        self.dict['b7']=self.LDA_dp_Y_long
+        self.dict['c8']=self.INY
+        self.dict['aa']=self.TAX
 
+    def INY(self,cpu,mem):
+        cpu.cycles+=2
+        cpu.reg_Y=hex(dec(cpu.reg_Y)+1)[2:].zfill(4)
+        cpu.increment_PC(1)
+        if cpu.debug==1:
+            print cpu.cycles, 'INY'
+        if dec(cpu.reg_Y)==0:
+            cpu.setflag('Z')
+        elif "{0:016b}".format(int(cpu.reg_Y,16))[0]=='1':
+            cpu.setflag('N')
+        
     def CMP_addr(self,cpu,mem):
         cpu.cycles+=4
         temp_addr=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
@@ -138,14 +154,27 @@ class opcodes:
                 cpu.setflag('C', clear=1)
             else:
                 cpu.setflag('C')               
-        print temp_val, temp_res, cpu.reg_A
+        #print temp_val, temp_res, cpu.reg_A
         cpu.increment_PC(3)
         
+    def PHA(self,cpu,mem):
+        if cpu.debug==1:
+            print cpu.cycles, 'PHA'
+        cpu.cycles+=3
+        if cpu.emulationmode==1 or cpu.reg_P[2]=='1':
+            stackpush(cpu,mem,cpu.reg_A[2:])
+            #print '8bit'
+        else:
+            cpu.cycles+=1
+            stackpush(cpu,mem,cpu.reg_A[:2])
+            stackpush(cpu,mem,cpu.reg_A[2:])
+        cpu.increment_PC(1)
+
     def PHP(self,cpu,mem):
         cpu.cycles+=3
         if cpu.debug==1:
             print cpu.cycles, 'PHP'
-        temp=hex(int('10110111',base=2))[2:]
+        temp=hex(int(cpu.reg_P,base=2))[2:]
         stackpush(cpu,mem,temp)
         cpu.increment_PC(1)
 
@@ -153,9 +182,38 @@ class opcodes:
         cpu.cycles+=6
         if cpu.debug==1:
             print cpu.cycles, 'JSR(abs)'
-        stackpush(cpu, mem, cpu.reg_PC[2:])
         stackpush(cpu, mem, cpu.reg_PC[:2])
+        stackpush(cpu, mem, cpu.reg_PC[2:])
         cpu.reg_PC=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
+
+    def BRA(self,cpu,mem):  #branching might have issues if crossing page boundary
+        cpu.cycles+=3
+        #print cpu.reg_PC
+        cpu.cycles+=1
+        temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])  
+        temp=temp.zfill(4)
+        #print temp
+        cpu.increment_PC(2)
+        cpu.reg_PC=hex(dec(cpu.reg_PC)+twos_to_dec(binary(temp),8))[2:]
+        if cpu.debug==1:
+            print cpu.cycles, 'BRA of (dec)', twos_to_dec(binary(temp),8)
+                
+    def BNE(self,cpu,mem):
+        cpu.cycles+=2
+        #print cpu.reg_PC
+        if cpu.reg_P[6]=='0':
+            cpu.cycles+=1
+            temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])  
+            temp=temp.zfill(4)
+            #print temp
+            cpu.increment_PC(2)
+            cpu.reg_PC=hex(dec(cpu.reg_PC)+twos_to_dec(binary(temp),8))[2:]
+            if cpu.debug==1:
+                print cpu.cycles, 'BNE of (dec)', twos_to_dec(binary(temp),8)
+        else:
+            cpu.increment_PC(2)
+            if cpu.debug==1:
+                print cpu.cycles, 'BNE (no branch)'
 
     def BPL(self,cpu,mem):
         cpu.cycles+=2
@@ -316,6 +374,38 @@ class opcodes:
                     cpu.setflag('Z')
         cpu.increment_PC(1)
 
+    def TAX(self,cpu,mem):
+        cpu.cycles+=2
+        if cpu.debug==1:
+            print cpu.cycles, 'TAX'
+        if cpu.reg_P[2]=='1':
+            if cpu.reg_P[3]=='1':
+                cpu.reg_X[2:]=cpu.reg_A[2:]
+                if "{0:08b}".format(int(cpu.reg_A[2:],16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_A[2:])==0:
+                    cpu.setflag('Z')
+            elif cpu.reg_P[3]=='0':
+                cpu.reg_X=cpu.reg_A
+                if "{0:08b}".format(int(cpu.reg_A,16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_A)==0:
+                    cpu.setflag('Z')
+        elif cpu.reg_P[2]=='0':
+            if cpu.reg_P[3]=='1':
+                cpu.reg_X[2:]=cpu.reg_A[2:]
+                if "{0:08b}".format(int(cpu.reg_A[2:],16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_A[2:])==0:
+                    cpu.setflag('Z')
+            elif cpu.reg_P[3]=='0':
+                cpu.reg_X=cpu.reg_A
+                if "{0:016b}".format(int(cpu.reg_A,16))[0]=='1':
+                    cpu.setflag('N')
+                if dec(cpu.reg_A)==0:
+                    cpu.setflag('Z')
+        cpu.increment_PC(1)
+
     def STA_long_X(self,cpu,mem):
         cpu.cycles+=5
         temp_pb=mem.read(cpu.reg_PB, str(hex(dec(cpu.reg_PC)+3))[2:],str(hex(dec(cpu.reg_PC)+3)[2:]))
@@ -355,35 +445,39 @@ class opcodes:
         cpu.cycles+=2
         if cpu.debug==1:
             print cpu.cycles, 'LDX(immediate)'
-        if cpu.reg_P[2]=='1':
+        if cpu.emulationmode==1 or cpu.reg_P[2]=='1':
             temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
             cpu.reg_X=cpu.reg_X[:2]+temp
             cpu.increment_PC(2)
+            if "{0:08b}".format(int(temp,16))[0]=='1':
+                cpu.setflag('N')
         elif cpu.reg_P[2]=='0':
             temp=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
             cpu.reg_X=temp
             cpu.increment_PC(3)
+            if "{0:016b}".format(int(temp,16))[0]=='1':
+                cpu.setflag('N')
         if dec(temp)==0:
             cpu.setflag('Z')
-        elif "{0:016b}".format(int(temp,16))[0]=='1':
-            cpu.setflag('N')
 
     def LDY_const(self,cpu,mem):
         cpu.cycles+=2
         if cpu.debug==1:
             print cpu.cycles, 'LDY(immediate)'
-        if cpu.reg_P[2]=='1':
+        if cpu.emulationmode==1 or cpu.reg_P[2]=='1':
             temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
             cpu.reg_Y=cpu.reg_Y[:2]+temp
             cpu.increment_PC(2)
+            if "{0:08b}".format(int(temp,16))[0]=='1':
+                cpu.setflag('N')
         elif cpu.reg_P[2]=='0':
             temp=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
             cpu.reg_Y=temp
             cpu.increment_PC(3)
+            if "{0:016b}".format(int(temp,16))[0]=='1':
+                cpu.setflag('N')
         if dec(temp)==0:
             cpu.setflag('Z')
-        elif "{0:016b}".format(int(temp,16))[0]=='1':
-            cpu.setflag('N')
 
     def TCS(self,cpu,mem):
         cpu.cycles+=2
@@ -392,7 +486,7 @@ class opcodes:
         cpu.reg_S=cpu.reg_A
         cpu.increment_PC(1)
 
-    def ORA_dp_X_indirect(self,cpu,mem):
+    def ORA_dp_X_indirect(self,cpu,mem):  # need to check X indexing
         cpu.cycles+=6
         if cpu.debug==1:
             print cpu.cycles, 'ORA(dp,X,indir)'
@@ -480,8 +574,8 @@ class opcodes:
             cpu.cycles+=1
             self.stackpush(cpu, mem, cpu.reg_PB)
             cpu.reg_PC=str(hex(dec(cpu.reg_PC)+2)[2:])
-            self.stackpush(cpu, mem, cpu.reg_PC[2:])
             self.stackpush(cpu, mem, cpu.reg_PC[:2])
+            self.stackpush(cpu, mem, cpu.reg_PC[2:])
             self.stackpush(cpu, mem, hex(int(cpu.reg_P,2))[2:])
             cpu.setflag('I')
             cpu.setflag('D', clear=1)
@@ -490,8 +584,8 @@ class opcodes:
             cpu.reg_PC=reverse_endian(mem.read(cpu.reg_PB, 'FFE6', 'FFE7'))
         elif cpu.emulationmode==1:
             cpu.reg_PC=str(hex(dec(cpu.reg_PC)+2)[2:])
-            self.stackpush(cpu, mem, cpu.reg_PC[2:])
             self.stackpush(cpu, mem, cpu.reg_PC[:2])
+            self.stackpush(cpu, mem, cpu.reg_PC[2:])
             cpu.setflag('B')
             self.stackpush(cpu, mem, hex(int(cpu.reg_P,2))[2:])
             cpu.setflag('I')
@@ -524,20 +618,35 @@ class opcodes:
 
     def LDA_const(self,cpu, mem):
         cpu.cycles+=2
-        if cpu.debug==1:
-            print cpu.cycles,
         if cpu.emulationmode==1 or cpu.reg_P[2]=='1':
             temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
             cpu.reg_A=cpu.reg_A[0:2]+temp
             cpu.increment_PC(2)
         elif cpu.reg_P[2]=='0':
             temp=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
-            cpu.reg_A=reverse_endian(mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+2)[2:]))
+            cpu.reg_A=temp
             cpu.increment_PC(3)
+        if cpu.debug==1:
+            print cpu.cycles,'LDA(immediate)'
         if dec(temp)==0:
             cpu.setflag('Z')
         elif bin(dec(temp))[2]==1:
             cpu.setflag('N')
+            
+    def LDA_dp_Y_long(self,cpu,mem):  #have to recheck this addressing mode
+        cpu.cycles+=6
+        temp=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+        if cpu.reg_P[2]=='0':
+            temp=temp+cpu.reg_D
+            temp=hex(dec(temp)+dec(cpu.reg_Y))[2:].zfill(6)
+            cpu.reg_A=reverse_endian(mem.read(temp[:2],temp[2:],hex(dec(temp[2:])+1)[2:]))
+            cpu.increment_PC(2)
+            cpu.cycles+=1
         if cpu.debug==1:
-            print 'LDA(immediate)'
+            print cpu.cycles, 'LDA(dp,long,Y) at', temp
+        if dec(cpu.reg_A)==0:
+            cpu.setflag('Z')
+        elif "{0:016b}".format(int(cpu.reg_A,16))[0]=='1':
+            cpu.setflag('N')
+
 
