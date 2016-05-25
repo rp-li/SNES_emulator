@@ -1,7 +1,7 @@
 #################################################################
 #  file containing 65816 CPU opcodes
 #  also includes a few useful bit manipulation functions
-#################################################################
+##################################################################
 
         
 def stackpush(cpu, mem, val):    #only pushes 1 byte at a time, normally stackpushes high byte first then low
