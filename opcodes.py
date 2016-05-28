@@ -116,9 +116,51 @@ class opcodes:
         self.dict['aa']=self.TAX
         self.dict['e0']=self.CPX_const
         self.dict['2a']=self.ROL
+        self.dict['69']=self.ADC_const
+        self.dict['69']=self.PLA
 
-    #def ADC_const(self,cpu,mem):
-        
+    def ADC_const(self,cpu,mem):   #overflow flag V not implemented
+        if cpu.debug==1:
+            print cpu.cycles, 'ADC(immediate)'
+        cpu.increment_PC(1)
+        if cpu.reg_P[2]=='0':
+            arg=mem.read(cpu.reg_PB,cpu.reg_PC,hex(dec(cpu.reg_PC)+1)[2:].zfill(4))
+            arg=reverse_endian(arg)
+            if cpu.reg_P[4]=='0':
+                cpu.reg_A=hex(dec(cpu.reg_A)+dec(arg))[2:].zfill(4)
+            elif cpu.reg_P[4]=='1':
+                arg=hextobcd_decimal(arg)
+                cpu.reg_A=hex(dec(cpu.reg_A)+arg)[2:].zfill(4)
+            cpu.increment_PC(2)
+            cpu.cycles+=3
+            if dec(cpu.reg_A)==0:
+                cpu.setflag('Z')
+            if bin(dec(cpu.reg_A))[2:].zfill(16)[0]=='1':
+                cpu.setflag('N')
+            if dec(cpu.reg_A)<=dec('ffff'):
+                cpu.setflag('C', clear=1)
+            else:
+                cpu.setflag('C')
+                cpu.reg_A=cpu.reg_A[-4:]
+        elif cpu.reg_P[2]=='1':
+            arg=mem.read(cpu.reg_PB,cpu.reg_PC,cpu.reg_PC)
+            if cpu.reg_P[4]=='0':
+                cpu.reg_A=cpu.reg_A[:2]+hex(dec(cpu.reg_A[2:])+dec(arg))[2:].zfill(2)
+            elif cpu.reg_P[4]=='1':
+                arg=hextobcd_decimal(arg)
+                cpu.reg_A=cpu.reg_A[:2]+hex(dec(cpu.reg_A[2:])+arg)[2:].zfill(2)    
+            cpu.increment_PC(1)
+            cpu.cycles+=2
+            if dec(cpu.reg_A[2:])==0:
+                cpu.setflag('Z')
+            if bin(dec(cpu.reg_A[2:]))[2:].zfill(8)[0]=='1':
+                cpu.setflag('N')
+            if dec(cpu.reg_A[2:])<=dec('ff'):
+                cpu.setflag('C', clear=1)
+            else:
+                cpu.setflag('C')
+                cpu.reg_A=cpu.reg_A[:2]+cpu.reg_A[-2:]
+            
 
     def ROL(self,cpu,mem):
         if cpu.debug==1:
@@ -223,7 +265,28 @@ class opcodes:
             stackpush(cpu,mem,cpu.reg_A[:2])
             stackpush(cpu,mem,cpu.reg_A[2:])
         cpu.increment_PC(1)
-
+        
+    def PLA(self,cpu,mem):
+        if cpu.debug==1:
+            print cpu.cycles, 'PLA'
+        cpu.cycles+=4
+        if cpu.emulationmode==1 or cpu.reg_P[2]=='1':
+            cpu.reg_A=cpu.reg_A[:2]+stackpull(cpu,mem)
+            if dec(cpu.reg_A[2:])==0:
+                cpu.setflag('Z')
+            elif bin(dec(cpu.reg_A[2:]))[2:].zfill(8)[0]=='1':
+                cpu.setflag('N')
+            #print '8bit'
+        else:
+            cpu.cycles+=1
+            cpu.reg_A[2:]=stackpull(cpu,mem)
+            cpu.reg_A[:2]=stackpull(cpu,mem)
+            if dec(cpu.reg_A)==0:
+                cpu.setflag('Z')
+            elif bin(dec(cpu.reg_A))[2:].zfill(16)[0]=='1':
+                cpu.setflag('N')
+        cpu.increment_PC(1)
+        
     def PHP(self,cpu,mem):
         cpu.cycles+=3
         if cpu.debug==1:
