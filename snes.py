@@ -2,7 +2,7 @@
 #  Main thread
 #  Will implement different threads for CPU and PPU later on
 #
-######################################################################
+#######################################################################
 
 import numpy as np
 import binascii
