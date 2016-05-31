@@ -1,0 +1,13 @@
+Instructions
+https://en.wikibooks.org/wiki/Super_NES_Programming/65c816_reference
+http://wiki.superfamicom.org/snes/show/65816+Reference
+http://wiki.superfamicom.org/snes/show/Learning+65816+Assembly
+http://datasheets.chipdb.org/Western%20Design/w65c816s.pdf
+
+Memory Map
+https://en.wikibooks.org/wiki/Super_NES_Programming/SNES_memory_map
+http://www.emulatronia.com/doctec/consolas/snes/SNESMem.txt
+
+Very Useful CPU docs:
+http://wiki.nesdev.com/w/images/7/76/Programmanual.pdf
+http://softpixel.com/~cwright/sianse/docs/65816NFO.HTM#3.13
