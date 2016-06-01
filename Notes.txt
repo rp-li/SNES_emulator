@@ -1,0 +1,2 @@
+Todo:
+hardware registers $2140-2143
