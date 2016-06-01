@@ -1,2 +1,1 @@
-Todo:
-hardware registers $2140-2143
+CPU gets stuck while pushing to $2140 and reading $2141, which are SPC700 registers

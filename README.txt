@@ -1,4 +1,3 @@
-
 Completed:
 -Memory mapping
 -Boot-up sequence

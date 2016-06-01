@@ -15,7 +15,7 @@ from opcodes import *
 
 ROMPATH="../SMW_rom.sfc"
 #ROMPATH="../test.txt"
-CPUMAXCYCLES=49080
+CPUMAXCYCLES=999999999999
 
 class cpu:
     def __init__(self):

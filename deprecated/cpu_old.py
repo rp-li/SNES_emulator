@@ -77,7 +77,6 @@ class cpu:
             self.reg_P="".join(temp)
 
     #ADDRESSING MODES
-
     #'imp': Implied
     #'immemflag': ImmediateMemoryFlag
     #'imindexflag': ImmediateIndexFlag

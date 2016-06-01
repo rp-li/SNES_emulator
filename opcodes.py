@@ -117,9 +117,40 @@ class opcodes:
         self.dict['e0']=self.CPX_const
         self.dict['2a']=self.ROL
         self.dict['69']=self.ADC_const
-        self.dict['69']=self.PLA
+        self.dict['68']=self.PLA
+        self.dict['70']=self.BVS
+        self.dict['eb']=self.XBA
+        self.dict['f0']=self.BEQ
 
-    def ADC_const(self,cpu,mem):   #overflow flag V not implemented
+    def XBA(self,cpu,mem):
+        if cpu.debug==1:
+            print cpu.cycles, 'XBA'
+        cpu.reg_A=cpu.reg_A[2:]+cpu.reg_A[:2]
+        if dec(cpu.reg_A[2:])==0:
+            cpu.setflag('Z')
+        elif bin(dec(cpu.reg_A[2:]))[2:].zfill(8)[0]=='1':
+            cpu.setflag('N')
+        cpu.cycles+=3
+        cpu.increment_PC(1)
+
+    def BVS(self,cpu,mem): #page boundary crossing add cycle not implemented (some other braching instructions may also have this)
+        if cpu.reg_P[1]=='1':
+            if cpu.debug==1:
+                print cpu.cycles, 'BVS of (dec)', 
+            cpu.cycles+=3
+            arg=mem.read(cpu.reg_PB, hex(dec(cpu.reg_PC)+1)[2:].zfill(4),hex(dec(cpu.reg_PC)+1)[2:].zfill(4))
+            arg=twos_to_dec(binary(arg),8)
+            if cpu.debug==1:
+                print arg
+            cpu.increment_PC(2)
+            cpu.reg_PC=hex(dec(cpu.reg_PC)+arg)[2:].zfill(4)
+        else:
+            if cpu.debug==1:
+                print cpu.cycles, 'BVS (no branch)'
+            cpu.increment_PC(2)
+            cpu.cycles+=2
+
+    def ADC_const(self,cpu,mem):
         if cpu.debug==1:
             print cpu.cycles, 'ADC(immediate)'
         cpu.increment_PC(1)
@@ -127,16 +158,22 @@ class opcodes:
             arg=mem.read(cpu.reg_PB,cpu.reg_PC,hex(dec(cpu.reg_PC)+1)[2:].zfill(4))
             arg=reverse_endian(arg)
             if cpu.reg_P[4]=='0':
+                if dec(cpu.reg_A)+dec(arg)>32767:
+                    cpu.setflag('V')
                 cpu.reg_A=hex(dec(cpu.reg_A)+dec(arg))[2:].zfill(4)
             elif cpu.reg_P[4]=='1':
                 arg=hextobcd_decimal(arg)
+                if dec(cpu.reg_A)+arg>32767:
+                    cpu.setflag('V')
                 cpu.reg_A=hex(dec(cpu.reg_A)+arg)[2:].zfill(4)
             cpu.increment_PC(2)
             cpu.cycles+=3
             if dec(cpu.reg_A)==0:
                 cpu.setflag('Z')
-            if bin(dec(cpu.reg_A))[2:].zfill(16)[0]=='1':
-                cpu.setflag('N')
+            else:
+                cpu.setflag('Z', clear=1)
+                if bin(dec(cpu.reg_A))[2:].zfill(16)[0]=='1':
+                    cpu.setflag('N')
             if dec(cpu.reg_A)<=dec('ffff'):
                 cpu.setflag('C', clear=1)
             else:
@@ -145,23 +182,29 @@ class opcodes:
         elif cpu.reg_P[2]=='1':
             arg=mem.read(cpu.reg_PB,cpu.reg_PC,cpu.reg_PC)
             if cpu.reg_P[4]=='0':
+                if dec(cpu.reg_A)+dec(arg)>127:
+                    cpu.setflag('V')
                 cpu.reg_A=cpu.reg_A[:2]+hex(dec(cpu.reg_A[2:])+dec(arg))[2:].zfill(2)
             elif cpu.reg_P[4]=='1':
                 arg=hextobcd_decimal(arg)
+                if dec(cpu.reg_A)+arg>127:
+                    cpu.setflag('V')
                 cpu.reg_A=cpu.reg_A[:2]+hex(dec(cpu.reg_A[2:])+arg)[2:].zfill(2)    
             cpu.increment_PC(1)
             cpu.cycles+=2
             if dec(cpu.reg_A[2:])==0:
                 cpu.setflag('Z')
-            if bin(dec(cpu.reg_A[2:]))[2:].zfill(8)[0]=='1':
-                cpu.setflag('N')
+            else:
+                cpu.setflag('Z', clear=1)
+                if bin(dec(cpu.reg_A))[2:].zfill(8)[0]=='1':
+                    cpu.setflag('N')
             if dec(cpu.reg_A[2:])<=dec('ff'):
                 cpu.setflag('C', clear=1)
             else:
                 cpu.setflag('C')
                 cpu.reg_A=cpu.reg_A[:2]+cpu.reg_A[-2:]
-            
-
+        #print cpu.reg_A
+        
     def ROL(self,cpu,mem):
         if cpu.debug==1:
             print cpu.cycles, 'ROL A'
@@ -315,7 +358,7 @@ class opcodes:
         if cpu.debug==1:
             print cpu.cycles, 'BRA of (dec)', twos_to_dec(binary(arg),8)
                 
-    def BNE(self,cpu,mem):
+    def BNE(self,cpu,mem): #page boundary crossing not increasing cycle
         cpu.cycles+=2
         #print cpu.reg_PC
         if cpu.reg_P[6]=='0':
@@ -331,8 +374,25 @@ class opcodes:
             cpu.increment_PC(2)
             if cpu.debug==1:
                 print cpu.cycles, 'BNE (no branch)'
-
-    def BPL(self,cpu,mem):
+                
+    def BEQ(self,cpu,mem): #page boundary crossing not increasing cycle
+        cpu.cycles+=2
+        #print cpu.reg_PC
+        if cpu.reg_P[6]=='1':
+            cpu.cycles+=1
+            arg=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])  
+            arg=arg.zfill(4)
+            #print arg
+            cpu.increment_PC(2)
+            cpu.reg_PC=hex(dec(cpu.reg_PC)+twos_to_dec(binary(arg),8))[2:]
+            if cpu.debug==1:
+                print cpu.cycles, 'BEQ of (dec)', twos_to_dec(binary(arg),8)
+        else:
+            cpu.increment_PC(2)
+            if cpu.debug==1:
+                print cpu.cycles, 'BEQ (no branch)'
+                
+    def BPL(self,cpu,mem): #page boundary crossing not increasing cycle
         cpu.cycles+=2
         #print cpu.reg_PC
         if cpu.emulationmode==1:
@@ -366,8 +426,8 @@ class opcodes:
             elif int(cpu.reg_X, base=16)==0:
                 cpu.setflag('Z')
         elif cpu.emulationmode==1 or cpu.reg_P[2]=='1':
-            if cpu.reg_X=='0000':
-                cpu.reg_X='ffff'
+            if cpu.reg_X[2:]=='00':
+                cpu.reg_X=hex(dec(cpu.reg_X[:2])-1)[2:].zfill(2)+'ff'
             else:
                 cpu.reg_X=cpu.reg_X[:2]+hex(dec(cpu.reg_X[2:])-1)[2:].zfill(2)
             if bin(int(cpu.reg_X[2:], base=16))[2:].zfill(8)[0]=='1':
@@ -603,24 +663,36 @@ class opcodes:
         cpu.reg_S=cpu.reg_A
         cpu.increment_PC(1)
 
-    def ORA_dp_X_indirect(self,cpu,mem):
+    def ORA_dp_X_indirect(self,cpu,mem): #crossing boundary not implemented
         cpu.cycles+=6
         if cpu.debug==1:
             print cpu.cycles, 'ORA(dp,X,indir)'
-        if cpu.reg_P=='0':
-            cpu.cycles+=1
         if cpu.reg_D[2:]!=0:
+                cpu.cycles+=1
+        if cpu.reg_P[2]=='0':
             cpu.cycles+=1
-        arg=mem.read(cpu.reg_PB, hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
-        arg=dec(arg)+dec(cpu.reg_D)+dec(cpu.reg_X)
-        arg=reverse_endian(mem.read(cpu.reg_PB, hex(arg)[2:].zfill(4), hex(arg+1)[2:].zfill(4)))
-        #print arg, cpu.reg_A
-        cpu.reg_A=hex(int(arg, 16) | int(cpu.reg_A, 16))[2:].zfill(4)
-        if bin(dec(cpu.reg_A))[2:].zfill(16)[0]=='1':
-            cpu.setflag('N')
-        elif dec(cpu.reg)==0:
-            cpu.setflag('Z')
-        cpu.increment_PC(2)
+            arg=mem.read(cpu.reg_PB, hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            arg=dec(arg)+dec(cpu.reg_D)+dec(cpu.reg_X)
+            arg=reverse_endian(mem.read(cpu.reg_PB, hex(arg)[2:].zfill(4), hex(arg+1)[2:].zfill(4)))
+            #print arg, cpu.reg_A
+            cpu.reg_A=hex(int(arg, 16) | int(cpu.reg_A, 16))[2:].zfill(4)
+            if bin(dec(cpu.reg_A))[2:].zfill(16)[0]=='1':
+                cpu.setflag('N')
+            elif dec(cpu.reg_A)==0:
+                cpu.setflag('Z')
+            cpu.increment_PC(2)
+        elif cpu.reg_P[2]=='1':
+            arg=mem.read(cpu.reg_PB, hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
+            arg=dec(arg)+dec(cpu.reg_D)+dec(cpu.reg_X)
+            arg=mem.read(cpu.reg_PB, hex(arg)[2:].zfill(4), hex(arg)[2:].zfill(4))
+            #print arg, cpu.reg_A
+            arg=hex(int(arg, 16) | int(cpu.reg_A[2:], 16))[2:].zfill(2)
+            cpu.reg_A=cpu.reg_A[:2]+arg
+            if bin(dec(cpu.reg_A[2:]))[2:].zfill(8)[0]=='1':
+                cpu.setflag('N')
+            elif dec(cpu.reg_A[2:])==0:
+                cpu.setflag('Z')
+            cpu.increment_PC(2)
         
     def TCD(self,cpu, mem):
         cpu.cycles+=2
@@ -760,14 +832,22 @@ class opcodes:
         elif bin(dec(arg))[2]==1:
             cpu.setflag('N')
             
-    def LDA_dp_Y_long(self,cpu,mem):  #have to recheck this addressing mode
+    def LDA_dp_Y_long(self,cpu,mem):  #crossing page add cycle not implemented
         cpu.cycles+=6
         arg=mem.read(cpu.reg_PB,hex(dec(cpu.reg_PC)+1)[2:],hex(dec(cpu.reg_PC)+1)[2:])
         if cpu.reg_P[2]=='0':
             arg=arg+cpu.reg_D
             arg=hex(dec(arg)+dec(cpu.reg_Y))[2:].zfill(6)
-            cpu.reg_A=reverse_endian(mem.read(arg[:2],arg[2:],hex(dec(arg[2:])+1)[2:]))
+            cpu.reg_A=reverse_endian(mem.read(arg[:2],arg[2:],hex(dec(arg[2:])+1)[2:].zfill(4)))
             cpu.increment_PC(2)
+            cpu.cycles+=1
+        elif cpu.reg_P[2]=='1':
+            arg=arg+cpu.reg_D
+            arg=hex(dec(arg)+dec(cpu.reg_Y[2:]))[2:].zfill(6)
+            cpu.reg_A=cpu.reg_A[:2]+mem.read(arg[:2],arg[2:],arg[2:])
+            cpu.increment_PC(2)
+        #print arg
+        if cpu.reg_D[2:]!='00':
             cpu.cycles+=1
         if cpu.debug==1:
             print cpu.cycles, 'LDA(dp,long,Y) at', arg
