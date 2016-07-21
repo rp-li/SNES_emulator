@@ -15,12 +15,13 @@ from opcodes import *
 
 ROMPATH="../SMW_rom.sfc"
 #ROMPATH="../test.txt"
-CPUMAXCYCLES=999999999999
+CPUMAXCYCLES=10000
+DEBUG=0
 
 class cpu:
     def __init__(self):
         self.opcodes=opcodes()
-        self.debug=1
+        self.debug=DEBUG
         self.vdebug=0
         self.speed=123
         self.emulationmode=1
