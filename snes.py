@@ -152,7 +152,7 @@ class spc:
         self.reg_T0='00'   #00FA:Timer 0 at 8khz (hex)
         self.reg_T1='00'   #00FB:Timer 1 at 8khz (hex)
         self.reg_T2='00'   #00FC:Timer 2 at 64khz (hex)
-        self.reg_C0='00'   #00FD:Counter 0 (hex)
+        self.reg_C0='00'   #00FD:Counter 0 (hex) 
         self.reg_C1='00'   #00FE:Counter 1 (hex)
         self.reg_C2='00'   #00FF:Counter 2 (hex)
         print 'SPC700 Initialized'
