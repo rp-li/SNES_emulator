@@ -15,8 +15,8 @@ from opcodes import *
 
 ROMPATH="../SMW_rom.sfc"
 #ROMPATH="../test.txt"
-CPUMAXCYCLES=10000
-DEBUG=0
+CPUMAXCYCLES=9999999
+DEBUG=1
 
 class cpu:
     def __init__(self):
@@ -133,6 +133,31 @@ class cpu:
             temp=list(self.reg_P)
             temp[3]=str(int(not(clear)))
             self.reg_P="".join(temp)
+
+class spc:
+    def __init__(self):
+        self.opcodes=spc_opcodes()
+        self.debug=DEBUG
+        self.vdebug=0
+        self.cycles=0
+        self.isrunning=0
+        #SPC700 REGISTERS at 00F0-00FF
+        self.reg_CON1='00000000'  #00F1:control register bits 0-2 timer enables (1=on), bits 4-5 are I/O port clear bits (11=clear all)(bin)
+        self.reg_DRGA='00'  #00F2:DSP Register Addr Latch (DSP register to read or modify)(hex)
+        self.reg_DDAT='00'  #00F3:DSP Data Register (read/write the DSP register)(hex)
+        self.reg_P0='00'  #00F4:Port0 (hex)
+        self.reg_P1='00'  #00F5:Port1 (hex)
+        self.reg_P2='00'  #00F6:Port2 (hex)
+        self.reg_P3='00'  #00F7:Port3 (hex)        
+        self.reg_T0='00'   #00FA:Timer 0 at 8khz (hex)
+        self.reg_T1='00'   #00FB:Timer 1 at 8khz (hex)
+        self.reg_T2='00'   #00FC:Timer 2 at 64khz (hex)
+        self.reg_C0='00'   #00FD:Counter 0 (hex)
+        self.reg_C1='00'   #00FE:Counter 1 (hex)
+        self.reg_C2='00'   #00FF:Counter 2 (hex)
+        print 'SPC700 Initialized'
+
+
 
 class mem:
     def __init__(self):
