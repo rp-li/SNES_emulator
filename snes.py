@@ -135,8 +135,26 @@ class cpu:
             self.reg_P="".join(temp)
 
 class spc:
+    #registers 2140-2143 moves data from CPU to SPC700
+    #SNES SIDE               SPC SIDE
+    #
+    #(write)                    (write)
+    #-----> $2140 ------------,    .-------- $F4 <-----
+    #-----> $2141 ----------, |    | .------ $F5 <-----
+    #-----> $2142 --------, | |    | | .---- $F6 <-----
+    #-----> $2143 ------, | | |    | | | .-- $F7 <-----
+    #                   | | | |    | | | |
+    #<----- $2140 <-----|-|-|-|----' | | |
+    #<----- $2141 <-----|-|-|-|------' | |
+    #<----- $2142 <-----|-|-|-|--------' |
+    #<----- $2143 <-----|-|-|-|----------'
+    #(read)             | | | |          (read)
+    #                   | | | `------------> $F4 ------>
+    #                   | | `--------------> $F5 ------>
+    #                   | `----------------> $F6 ------>
+    #                   `------------------> $F7 ------>
     def __init__(self):
-        self.opcodes=spc_opcodes()
+        #self.opcodes=spc_opcodes()
         self.debug=DEBUG
         self.vdebug=0
         self.cycles=0
@@ -157,6 +175,13 @@ class spc:
         self.reg_C2='00'   #00FF:Counter 2 (hex)
         print 'SPC700 Initialized'
 
+    def start(self, reset=0):
+        if reset==1:
+            self.stackpointer='01ef'
+            addr=0
+            for addr in range(0xef+1):
+                mem.write('00',addr,'00')
+            self.isrunning=1
 
 
 class mem:
@@ -222,7 +247,9 @@ class rom:
 rom=rom()
 cpu=cpu()
 mem=mem()
+spc=spc()
 
 #boot sequence
 print 'SNES started'
-cpu.start(reset=1)
+#cpu.start(reset=1)
+spc.start(reset=1)
