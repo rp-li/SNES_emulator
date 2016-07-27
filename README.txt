@@ -11,3 +11,4 @@ Partially implemented:
 Planned but currently unimplemented:
 -Frame buffers and everything video
 -Support for LoROM
+-Translation and compilation into either C or Java
