@@ -1,7 +1,7 @@
 Currently only tested on Super Mario World ROM (HiROM format)
 
 Completed:
--Memory mapping
+-Main memory map (might be missing some hardware registers and occasional shadowed regions)
 -Boot-up sequence
 
 Partially implemented:
