@@ -1,4 +1,4 @@
-Currently only tested on Super Mario World ROM (HiROM format)
+Currently only tested on SMW ROM (HiROM format)
 
 Completed:
 -Main memory map (might be missing some hardware registers and occasional shadowed regions)
